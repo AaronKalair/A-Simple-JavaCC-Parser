@@ -1,0 +1,598 @@
+// Our language is case insensitive
+options {
+    IGNORE_CASE=true;
+    }
+
+PARSER_BEGIN(Parser)  
+
+// Needed for the array list class
+import java.util.*;
+
+public class Parser {
+    
+    // A class to represent a location and the things around it
+    static class Location {
+    
+        // Name of the place
+        private String currentName;
+        
+        // The areas around it
+        public ArrayList north = new ArrayList();
+        public ArrayList south = new ArrayList();
+        public ArrayList east = new ArrayList();
+        public ArrayList west = new ArrayList();
+        public String name;
+        
+        // Set currentName in the constructor
+        Location (String name) {
+            currentName = name.toLowerCase();
+        }
+        
+        // Return current name, important for finding out which place this class represents
+        public String getName() {
+            return currentName.toLowerCase();
+        }
+    }
+    
+    // Global array list for storing places
+    public static ArrayList places = new ArrayList();
+    // Global array list for storing location objects
+    public static ArrayList relatedPlaces = new ArrayList();
+    
+    public static void main(String[] args) throws ParseException, TokenMgrError {
+        // Create a new parser and feed it the standard input
+        Parser parser = new Parser(System.in);
+        try {
+            parser.parse();
+        }
+        catch(TokenMgrError e) {
+            System.err.println("[LEXING ERROR] Invalid character");
+            System.exit(0);
+        }
+        catch(ParseException e) {
+            System.err.println("[PARSING EXCEPTION] Invalid Input");
+            System.exit(0);
+        }
+        
+    }    
+}
+PARSER_END(Parser)
+
+// Things we want to ignore (white space)
+SKIP:
+{
+    " " |
+    "\n" |
+    "\r" |
+    "\t" 
+}
+
+// The tokens for our language
+TOKEN :
+{
+    <SEE: "I see"> |
+    <THE: "the"> |
+    <AND: "and"> |
+    <IS: "is"> |
+    <ARE: "are"> |
+    <NORTH: "north"> |
+    <SOUTH: "south"> |
+    <EAST: "east"> |
+    <WEST: "west"> |
+    <OF: "of"> |
+    <FULLSTOP: "."> |
+    <SEMICOLON: ";"> |
+    <COMMA: ","> |
+    // Cover all possible formats of numbers
+    <NUMBER : ((["0"-"9"])+ | (["0"-"9"])+ "." (["0"-"9"])+ | (["0"-"9"])+ ".")+ >  |
+    <UNIT: "m" | "km" | "miles"> |
+    // A word can be any character of the alphabet (upper or lower case) or any numbers
+    <WORD: (["a"-"z", "A"-"Z"])+> |
+    // An escaped word must start with a [ be followed by any character of the alphabet (upper or lowercase) or any numbers and may contain
+    // white space and then end with a ]
+    <ESCAPEDWORD: "[" (["a"-"z", "A"-"Z", " "])+ "]" >
+}
+
+void parse(): 
+{
+}
+{
+    // File ends with EOF
+    start() <EOF>
+}
+
+// Recognises a list of places or a list of places relative to each other
+void start() throws ParseException:  
+{
+}
+{
+    (   // Either were entering a list of things we see, or a list of things we see with respect to some other thing
+        (spotted() | direction())
+        
+        // Each line must end with either a . or ;
+        try { 
+            (<FULLSTOP> | <SEMICOLON>) 
+        } 
+        
+        // If a line didn't end that way alert the user to an invalid terminator and quit
+        catch (ParseException e) { 
+            System.err.println("[LEXING ERROR] Invalid terminator"); 
+            System.exit(0);  
+        }  
+        
+    )* // You can have as many lines of this input as you like
+}
+
+// Recognises a list of places you can see
+void spotted() throws ParseException: 
+{
+}
+{
+                           
+    try { 
+            // This bit has to always be at the start  
+             ( <SEE> <THE> place() )
+            // Followed by a list of any number of items
+            list() 
+    }
+    
+    catch(ParseException e) {
+        System.err.println("[PARSING ERROR] Locations can only be declared once");
+        System.exit(0);
+    }
+}
+
+// Recognises a list of places seperated by either a "," or "and"
+void list() throws ParseException: 
+{
+}
+{
+    try { 
+        (
+            // We need a list seperator and then "the" followed by the place name
+            (<COMMA> | <AND>)
+                <THE> place()
+        )* // We can have as many items in the list as we want 
+        
+     }
+      
+    // If a list doesn't meet that standard throw an error informing the user their list is in the incorrect format
+    catch (ParseException e) { 
+        System.err.println("[PARSING ERROR] Invalid list format "); 
+        System.exit(0); 
+    }
+    
+}
+
+// Recognises a place name, either in escaped or unescaped format and adds it to an array list of locations
+void place() throws ParseException: 
+{
+    String x = "";
+    Token y = null;
+}
+{
+
+    (  
+        (   // A word any number of times e.g. Theme park 
+            y = <WORD>          
+            { x += " " + y.image; } 
+        )+ 
+        
+        |
+    
+        (   
+            // Or a single escaped word, e.g. [Theme Park]
+            y = <ESCAPEDWORD>
+            { x += " " + y.image; } 
+        ) 
+    
+    )
+    
+    // Now we have a string representing the place add it to the array list.
+    {
+        // If the place is already in the array list throw a parse exception as we only allow a place to be declared once 
+        if (places.contains(x.toLowerCase())) {
+            throw new ParseException();     
+        }
+        
+        else {
+            // Add the place to our array list of places 
+            places.add(x.toLowerCase());
+            // Create a new place object and add it to our array list of place objects
+            Location z = new Location(x.toLowerCase());
+            relatedPlaces.add(z);
+       }
+       
+    }     
+}
+
+// Recognises any one of the cardinal points
+String compass() throws ParseException: 
+{
+    Token x;
+    String y = "";
+}
+{   // Attempt to recognise a cardinal point
+    try { 
+    
+        ( 
+            x = <NORTH> 
+            { y = x.image; }
+        )
+              
+        | 
+        
+        (
+            x = <SOUTH> 
+            { y = x.image; }
+        )
+        
+        |
+        
+        (
+            x = <EAST> 
+            { y = x.image; }
+        )
+        
+        |
+        
+        (
+            x = <WEST> 
+            { y = x.image; }
+        )
+        
+        
+    } 
+    
+    // If there were none throw an error and quit
+    catch (ParseException e) {  
+        System.err.println("[PARSING ERROR] Invalid direction"); 
+        System.exit(0); 
+    }
+    
+    {return y.toLowerCase();}
+}
+
+// Recognises a list of places with respect to to some other places
+void direction() throws ParseException:
+{
+    // Will hold the first place on the left hand side of a scentence 
+    String place1 = "";
+    // Will hold the first place on the right hand side of a scentence
+    String place2 = "";
+    // Will hold the cardinal point between places
+    String direction = "";
+    // Will hold the list of places on the left hand side of a scentence
+    ArrayList list1 = null;
+    // Will hold the list of places on the right hand side of a scentence
+    ArrayList list2 = null;
+}
+{
+
+    // Every line must start with the place
+    <THE> 
+    try {
+        // Check the first place in the list is already declared 
+        place1 = existingPlace() 
+    }
+    
+    catch (ParseException e) {
+        System.err.println("[PARSE EXCEPTION] Undeclared location");
+        System.exit(0);
+    }
+          
+    (   
+        // Followed by is for a single place 
+        <IS>  | 
+        
+        try { 
+            (
+                // Or a list of places seperated by either a "," or "and"
+                ( list1 = existingList() ) 
+                
+                // The list of places must be followed by "are" due to the rules of english    
+                <ARE>
+            )
+             
+        } 
+        
+        // If the format for a list of places was not met throw an error
+        catch (ParseException e) {
+            System.err.println("[PARSING ERROR] Bad Grammar"); 
+            System.exit(0);
+        } 
+    )
+    
+    // We may have a distance being specified
+    (<NUMBER> <UNIT>)?
+
+    // Now we need a cardinal point followed by of the location and potentially a list of other locations
+    direction = compass() 
+    
+    <OF> <THE> 
+    
+    try { 
+        // Check the first place on the right hand side of the list is already declared 
+        place2 = existingPlace() 
+    } 
+    
+    catch (ParseException e) { 
+        System.err.println("[PARSING ERROR] Undeclared Location"); 
+        System.exit(0);
+    } 
+    
+    // Check to see if we have a list of places on the right
+    list2 = existingList()
+    
+    // Now check the relations are valid
+    try{
+        
+        validateRelations(list1, list2, place1, place2, direction )
+    }
+    
+    catch (ParseException e) {
+        System.err.println("[SEMANTIC ERROR] Bad relation");
+        System.exit(0);
+    }
+       
+}
+
+// Checks realtions are semantically valid
+void validateRelations(ArrayList list1, ArrayList list2, String place1, String place2, String direction):
+{
+}
+{
+    {
+        // The basic easy part  
+        validLocations(place1, place2, direction);
+        
+        // Now if we had a list of places on the left we need to make sure they are all valid relations
+        if(list1 != null) {
+            // For every place in it set it direction of place2
+            for(int i=0; i<list1.size(); i++) {
+                validLocations((String)list1.get(i), place2, direction);
+            }
+        }
+        
+        // If we had a list of places on the right hand side check they are all valid relations
+        if(list2 != null ) {
+            // For every place in it set it direction of place2
+            for(int i=0; i<list2.size(); i++) {
+                validLocations(place1, (String)list2.get(i), direction);
+            }
+            
+        }
+        
+        // Now if we had a list of places on the right and the left we need to make sure we they are all valid locations
+        if(list2 != null && list1 != null) {
+            // for every element on the left
+            for(int i=0; i<list1.size(); i++) {
+                // Set it <direction of> every element on the right
+                for(int j=0; j<list2.size(); j++) {
+                    validLocations((String)list1.get(i), (String)list2.get(j), direction);
+                }
+            }
+            
+        }
+            
+    }
+}
+
+// Checks that the positioning of two places is valid
+void validLocations(String p1, String p2, String direction):
+{
+}
+{
+    {
+        // Check the two places are not the same as this is invalid
+        if(p1.equals(p2) ) {
+            throw new ParseException();
+        }
+        
+        // Get the objects for these places from the array list
+        Location l1 = getPlace(p1.toLowerCase());
+        Location l2 = getPlace(p2.toLowerCase());
+        direction = direction.toLowerCase();
+        
+        if(direction.equals("north")) {
+        
+            // If l1 is north of l2 then l2 can not be north of l1 so check this
+            if( l2.south.contains(l1) ) {
+                throw new ParseException();
+            }
+            
+            // Else everything is fine so add the places to the array lists
+            l2.north.add(l1);
+            l1.south.add(l2);
+            
+            // Deal with transitive relations
+            // Every element that is north of l1  must be north of l2
+            for(int i=0; i<l1.north.size(); i++) {
+                l2.north.add(l1.north.get(i));
+            }
+            
+            // Every element that is south of l2 must be south of l1
+            for(int i=0; i<l2.south.size(); i++) {
+                l1.south.add(l2.south.get(i));
+            }
+        }
+        
+        if(direction.equals("south")) {
+        
+            // If l1 is south of l2 then l2 can not be south of l1 so check this
+            if( l2.north.contains(l1) ) {
+                throw new ParseException();
+            }
+            
+            // Else everything is fine so add the places to the array lists
+            l2.south.add(l1);
+            l1.north.add(l2);
+            
+            // Deal with transitive relations
+            
+            // Every element that is south of l1  must be south of l2
+            for(int i=0; i<l1.south.size(); i++) {
+                l2.south.add(l1.south.get(i));
+            }
+            
+            // Every element that is north of l2 must be north of l1
+            for(int i=0; i<l2.north.size(); i++) {
+                l1.north.add(l2.north.get(i));
+            }
+        }
+        
+        if(direction.equals("east")) {
+        
+            // If l1 is east of l2 then l2 can not be east of l1 so check this
+            if( l2.west.contains(l1) ) {
+                throw new ParseException();
+            }
+            
+            // Else everything is fine so add the places to the array lists
+            l2.east.add(l1);
+            l1.west.add(l2);
+            
+            // Deal with transitive relations
+            
+            // Every element that is east of l1  must be east of l2
+            for(int i=0; i<l1.east.size(); i++) {
+                l2.east.add(l1.east.get(i));
+            }
+            
+            // Every element that is west of l2 must be west of l1
+            for(int i=0; i<l2.west.size(); i++) {
+                l1.west.add(l2.west.get(i));
+            }
+        }
+        
+        if(direction.equals("west")) {
+        
+            // If l1 is west of l2 then l2 can not be west of l1 so check this
+            if( l2.east.contains(l1) ) {
+                throw new ParseException();
+            }
+            
+            // Else everything is fine so add the places to the array lists
+            l2.west.add(l1);
+            l1.east.add(l2);
+            
+            // Deal with transitive relations
+            
+            // Every element that is west of l1  must be west of l2
+            for(int i=0; i<l1.west.size(); i++) {
+                l2.west.add(l1.west.get(i));
+            }
+            
+            // Every element that is east of l2 must be east of l1
+            for(int i=0; i<l2.east.size(); i++) {
+                l1.east.add(l2.east.get(i));
+            }
+       }  
+
+    }
+}
+
+// Returns the place represent by string x from the array list
+Location getPlace(String x):
+{
+}
+{
+    {
+        for(int i=0; i<relatedPlaces.size(); i++) {
+            Location check = (Location) relatedPlaces.get(i);
+            if(check.getName().equals(x) ){
+                return check;
+            }
+        
+        }
+
+    }
+
+}
+
+// Checks if a place name is already in the array list
+String existingPlace():
+{
+    String x = "";
+    Token y = null;
+}
+{
+
+    (
+    
+        (   
+            // A word any number of times e.g. Theme park 
+            y = <WORD>  
+            { x += " " + y.image; } 
+        )+ 
+    
+       |
+        
+        (   // Or a single escaped word, e.g. [Theme Park]
+            y = <ESCAPEDWORD>
+            { x += " " + y.image; } 
+        )
+        
+    ) 
+    
+    // Now we have the location string check its in the array list.
+    { 
+        if (!places.contains(x.toLowerCase())) {
+            throw new ParseException();     
+        }
+        
+        return x.toLowerCase();   
+    }
+       
+
+}
+
+// Checks if a list of places are already in the array list
+ArrayList existingList() throws ParseException: 
+{
+    String x = "";
+    ArrayList list = new ArrayList();
+}
+{
+    
+    try { 
+        (
+            // We need a list seperator and then "the" followed by the place name
+            (<COMMA> | <AND>) 
+                <THE>  
+                
+                // Check the place in the list is already in the array list
+                try { 
+                    x = existingPlace()
+                }
+                
+                catch (ParseException e) {
+                    System.err.println("[PARSING ERROR] Undeclared Location");
+                    System.exit(0);
+                }
+                
+                // Add the place to our list of places 
+                {list.add(x);}
+                   
+        )* // We can have as many items in the list as we want 
+                
+     }
+      
+    // If a list doesn't meet that standard throw an error informing the user their list is in the incorrect format
+    catch (ParseException e) { 
+        System.err.println("[PARSING ERROR] Invalid list format"); 
+        System.exit(0); 
+    }
+    
+    {
+        // If we had a list of places then return it
+        if( list.size() > 0 ) {
+            return list;
+        }
+        // If not return null so our check in the for loop doesn't fail
+        else {
+            return null;
+        }
+     }
+}
+

@@ -1,0 +1,6 @@
+I see the dog.
+I see the cat.
+I see the boat and the post office.
+I see the [north pole], the car, the ship and the cow.
+The dog is north of the cat.
+The [north pole] is north of the car, the ship and the cow.
